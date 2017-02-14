@@ -40,35 +40,19 @@ class MainForm(QWidget):
 
         #self.output = Output(self)
 
+    @pyqtSlot()
     def selectFolder(self, textField):
-        dialog = QFileDialog(self)
-        dialog.setFileMode(QFileDialog.Directory)
-        dialog.setOption(QFileDialog.ShowDirsOnly, True)
-        dialog.show()
+        fn = str(QFileDialog.getExistingDirectory(self, 'Select Folder'))
+        textField.setText(fn)
 
-        if dialog.exec_():
-            fns = dialog.selectedFiles()
-            textField.setText(fns[0])
 
+    @pyqtSlot()
     def sync(self):
-        sync = QMessageBox.question(self, 'Proceed?',
-                'Do you want to proceed?', QMessageBox.No | QMessageBox.Yes,
-                QMessageBox.Yes)
-
-        if sync == QMessageBox.Yes:
-            self.output = Output(self)
-            #self.output.textChanged.connect(self.do_stuff)
-
-            for i in range(4):
-                time.sleep(0.4)
-                self.output.setText(str(i))
-
-    def do_stuff(self):
-        pass
+        self.output = Output(self)
 
 
 class Output(QDialog):
-    textChanged = pyqtSignal()
+    textChanged = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super(Output, self).__init__(parent)
@@ -79,22 +63,78 @@ class Output(QDialog):
         self.button1 = QPushButton('Close')
         self.button1.clicked.connect(self.close)
         self.button2 = QPushButton('Start')
-        self.button2.clicked.connect(self.startSync)
+        self.button2.clicked.connect(self.startOutput)
+        self.button3 = QPushButton('Halt')
+        self.button3.clicked.connect(self.haltOutput)
 
         mainLayout = QGridLayout()
         mainLayout.addWidget(self.textArea1, 0, 0)
         buttonLayout = QHBoxLayout()
         buttonLayout.addWidget(self.button1)
         buttonLayout.addWidget(self.button2)
+        buttonLayout.addWidget(self.button3)
         mainLayout.addLayout(buttonLayout, 1, 0)
+
+        self.textChanged.connect(self.setText)
 
         self.setLayout(mainLayout)
         self.setFixedSize(500, 400)
         self.setWindowTitle('Output')
+        self.show()
 
+    @pyqtSlot(str)
     def setText(self, text):
         self.textArea1.append(text)
-        self.textChanged.emit()
+        #QApplication.processEvents()
+
+    @pyqtSlot()
+    def startOutput(self):
+        self.textChanged.emit('Starting')
+
+        self.worker = Worker()
+        self.thread = QThread()
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.start)
+        self.worker.progress.connect(self.setText)
+
+        self.thread.start()
+
+    @pyqtSlot()
+    def haltOutput(self):
+        self.textArea1.append('Stoping')
+        self.worker.quit()
+
+
+class Worker(QObject):
+    progress = pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super(Worker, self).__init__(parent)
+        self.isWorking = True
+
+    def __del__(self):
+        self.quit()
+
+    def start(self):
+        self.execute()
+
+    def quit(self):
+        self.progress.emit('Quiting')
+        self.isWorking = False
+
+    def execute(self):
+        i = 0
+        while self.isWorking:
+            self.progress.emit('Iteration: {}'.format(i))
+            time.sleep(2.0)
+            i += 1
+            if i > 3:
+                break
+
+        if self.isWorking:
+            self.progress.emit('Done')
+
+
 
 
 if __name__ == '__main__':
