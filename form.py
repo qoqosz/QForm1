@@ -38,17 +38,15 @@ class MainForm(QWidget):
         self.setFixedSize(430, 130)
         self.setWindowTitle('Folder Sync')
 
-        #self.output = Output(self)
-
     @pyqtSlot()
     def selectFolder(self, textField):
         fn = str(QFileDialog.getExistingDirectory(self, 'Select Folder'))
         textField.setText(fn)
 
-
     @pyqtSlot()
     def sync(self):
         self.output = Output(self)
+        self.output.show()
 
 
 class Output(QDialog):
@@ -80,12 +78,10 @@ class Output(QDialog):
         self.setLayout(mainLayout)
         self.setFixedSize(500, 400)
         self.setWindowTitle('Output')
-        self.show()
 
     @pyqtSlot(str)
     def setText(self, text):
         self.textArea1.append(text)
-        #QApplication.processEvents()
 
     @pyqtSlot()
     def startOutput(self):
@@ -101,8 +97,13 @@ class Output(QDialog):
 
     @pyqtSlot()
     def haltOutput(self):
-        self.textArea1.append('Stoping')
-        self.worker.quit()
+        self.textChanged.emit('Stoping')
+        QApplication.processEvents()
+
+        if self.worker.isWorking:
+            self.worker.quit()
+            self.thread.quit()
+            self.thread.wait()
 
 
 class Worker(QObject):
@@ -126,7 +127,7 @@ class Worker(QObject):
         i = 0
         while self.isWorking:
             self.progress.emit('Iteration: {}'.format(i))
-            time.sleep(2.0)
+            time.sleep(4.0)
             i += 1
             if i > 3:
                 break
@@ -135,14 +136,10 @@ class Worker(QObject):
             self.progress.emit('Done')
 
 
-
-
 if __name__ == '__main__':
     import sys
 
     app = QApplication(sys.argv)
-
     screen = MainForm()
     screen.show()
-
     sys.exit(app.exec_())
